@@ -1,4 +1,4 @@
-import { Component } from "react";
+import { useState, useEffect } from "react";
 import { ToastContainer } from "react-toastify";
 
 import Searchbar from "./Searchbar/Searchbar";
@@ -10,75 +10,68 @@ import Modal from "./Modal/Modal";
 
 const API_KEY = '29530903-57a4a13660c15182aca557193';
 
-class App extends Component {
-  state = {
-    images: [],
-    searchQuery: '',
-    page: 1,
-    totalHits: null,
-    error: null,
-    status: 'idle',
-    isModalOpen: false,
-    modalImage: '',
+export default function App()  {
+  const [images, setImages] = useState([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const [totalHits, setTotalHits] = useState(null)
+  const [error, setError] = useState(null)
+  const [status, setStatus] = useState('idle')
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [modalImage, setModalImage] = useState('')
+
+  const handleFormSubmit = searchQuery => {
+    setImages([])
+    setSearchQuery(searchQuery)
+    setError(null)
+    setPage(1)
+    setStatus('idle')
   }
 
-  handleFormSubmit = searchQuery => {
-    this.setState({
-      images: [],
-      searchQuery,
-      error: null,
-      page: 1,
-    })
+  const getNextPage = () => {
+    setPage(prevPage => prevPage + 1)
   }
 
-  getNextPage = () => {
-    this.setState(prevState => ({
-      page: prevState.page + 1,
-    }))
-  }
+  useEffect(() => {
+    if (searchQuery === '') {
+      return
+    }
+    setStatus('pending')
 
-  componentDidUpdate(_, prevState) {
-    if (prevState.searchQuery !== this.state.searchQuery || prevState.page !== this.state.page) {
-      this.setState({ status: 'pending' });
-      fetch(`https://pixabay.com/api/?q=${this.state.searchQuery}&page=${this.state.page}&key=${API_KEY}&image_type=photo&orientation=horizontal&per_page=12`)
-        .then(response => {
-          if (response.ok) {
-            return response.json();
-          }
+    fetch(`https://pixabay.com/api/?q=${searchQuery}&page=${page}&key=${API_KEY}&image_type=photo&orientation=horizontal&per_page=12`)
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        }
+        return Promise.reject(new Error(`Sorry, there is no images with value ${this.state.searchQuery}`))
+      })
+      .then(data => {
+        if (data.total !== 0) {
+          setImages(prevState => [...prevState, ...data.hits])
+          setTotalHits(data.totalHits)
+          setStatus('resolved')
+        } else {
+          setStatus('rejected')
+          setError(`There is no images for ${searchQuery}`)
+        };
+      })
+      .catch(error => {
+        setError(error)
+        setStatus('rejected')
+  })
+  }, [searchQuery, page])
 
-          return Promise.reject( new Error(`Sorry, there is no images with value ${this.state.searchQuery}`))
-        })
-        .then(data => {
-          if (data.totalHits !== 0) {
-            this.setState(state => ({
-            images: [...state.images, ...data.hits],
-            totalHits: data.totalHits,
-            status: 'resolved',
-          }))           
-          } else {
-            this.setState({
-              status: 'rejected',
-              error: `There is no images for ${this.state.searchQuery}`,
-            })
-          };
-        })
-        .catch(error => this.setState({error, status: 'rejected'}))
-  }
-  }
-
-  openModal = (evt) => {
-      const searchImg = this.state.images.find(image => image.webformatURL === evt.currentTarget.src
+  const openModal = (evt) => {
+      const searchImg = images.find(image => image.webformatURL === evt.currentTarget.src
     ).largeImageURL
-    this.setState({isModalOpen: true, modalImage: searchImg})
+    setIsModalOpen(true)
+    setModalImage(searchImg)
   }
 
-  closeModal = () => {
-    this.setState({isModalOpen: false, modalImage: ''})
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setModalImage('')
   }
-
-  render() {
-
-    const { images, error, status, totalHits, isModalOpen, modalImage } = this.state;
 
       return (
     <div
@@ -89,17 +82,15 @@ class App extends Component {
         color: '#010101',
           }}>
 
-          <Searchbar onSubmit={this.handleFormSubmit} />
+          <Searchbar onSubmit={handleFormSubmit} />
           {status === 'rejected' && <Error message={error} />}
           {status === 'pending' && <Loader />}
-          <ImageGallery images={images} onImageClick={this.openModal} />
-          {isModalOpen && <Modal image={modalImage} onClose={this.closeModal} />}
-          {images.length !== 0 && images.length !== totalHits && (<LoadMoreButton onClick={this.getNextPage}/>)}
+          <ImageGallery images={images} onImageClick={openModal} />
+          {isModalOpen && <Modal image={modalImage} onClose={closeModal} />}
+          {images.length !== 0 && images.length !== totalHits && (<LoadMoreButton onClick={getNextPage}/>)}
           <ToastContainer autoClose={2000} />          
           
     </div>
   );
   }
-};
 
-export default App
